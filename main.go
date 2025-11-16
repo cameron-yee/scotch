@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/rivo/tview"
@@ -23,6 +24,11 @@ type Inventory struct {
 	Item     string   `xml:"Item"`
 	Price    float64  `xml:"Price"`
 	UPC      int64    `xml:"UPC"`
+}
+
+type UIState struct {
+        Text         string
+        PriceMinimum int
 }
 
 func getDateURL(daysAgo int) string {
@@ -77,11 +83,16 @@ func getXMLData() *Root {
 	panic("Could not find valid URL in 30 tries")
 }
 
-func getVisibleItems(root *Root, filter string) string {
+func getVisibleItems(root *Root, uiState *UIState) string {
+        textFilter := uiState.Text
+
         var builder strings.Builder
         for _, item := range root.Items {
         	entry := fmt.Sprintf("%s -- $%.2f    (UPC: %d)\n", item.Item, item.Price, item.UPC)
-        	if (filter == "" || strings.Contains(strings.ToLower(entry), strings.ToLower(filter))) {
+        	if (
+                	textFilter == "" ||
+                	(strings.Contains(strings.ToLower(entry), strings.ToLower(textFilter)) &&
+                	int(item.Price) >= uiState.PriceMinimum)) {
                 	builder.WriteString(entry)
         	}
         }
@@ -92,10 +103,14 @@ func getVisibleItems(root *Root, filter string) string {
 func main() {
         root := getXMLData()
 
+	uiState := UIState{
+        	PriceMinimum: 0,
+        	Text: "",
+	}
 	app := tview.NewApplication()
 	textview := tview.NewTextView()
 
-	initialText := getVisibleItems(root, "")
+	initialText := getVisibleItems(root, &uiState)
 	textview.SetText(initialText)
 	textview.ScrollToBeginning()
 	textFilter := tview.NewInputField().
@@ -103,11 +118,27 @@ func main() {
 		SetFieldWidth(10)
 
 	textFilter.SetChangedFunc(func(text string) {
-        	textview.SetText(getVisibleItems(root, text))
+        	uiState.Text = text
+        	textview.SetText(getVisibleItems(root, &uiState))
+	})
+	priceMinimumFilter := tview.NewInputField().
+		SetLabel("Minimum Price: ").
+		SetFieldWidth(5).
+        	SetAcceptanceFunc(tview.InputFieldInteger)
+
+
+	priceMinimumFilter.SetChangedFunc(func(text string) {
+        	priceMinimum, err := strconv.Atoi(text)
+        	if err != nil {
+                	return
+        	}
+        	uiState.PriceMinimum = priceMinimum
+        	textview.SetText(getVisibleItems(root, &uiState))
 	})
 
 	flex := tview.NewFlex().
  		AddItem(textFilter, 0, 1, true).
+ 		AddItem(priceMinimumFilter, 0, 1, false).
  		AddItem(textview, 0, 12, false).
  		SetDirection(0)
 
