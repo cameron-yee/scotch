@@ -1,4 +1,3 @@
-// Demo code for the List primitive.
 package main
 
 import (
@@ -15,12 +14,12 @@ import (
 )
 
 type Root struct {
-	XMLName xml.Name  `xml:"Root"` // Maps to the <catalog> element
-	Items []Inventory `xml:"Inventory"`    // Maps to a slice of <book> elements
+	XMLName xml.Name  `xml:"Root"`
+	Items []Inventory `xml:"Inventory"`
 }
 type Inventory struct {
-	XMLName  xml.Name `xml:"Inventory"` // Maps to the <Inventory> element
-	Category string   `xml:"Category"` // Maps to the 'id' attribute of <book>
+	XMLName  xml.Name `xml:"Inventory"`
+	Category string   `xml:"Category"`
 	Item     string   `xml:"Item"`
 	Price    float64  `xml:"Price"`
 	UPC      int64    `xml:"UPC"`
