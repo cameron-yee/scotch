@@ -6,12 +6,14 @@ import (
         "strconv"
 
         "github.com/rivo/tview"
+        "github.com/gdamore/tcell/v2"
 )
 
 type UIState struct {
         Text         string
         PriceMaximum int
         PriceMinimum int
+        FocusedIndex int
 }
 
 func getVisibleItems(root *Data, uiState *UIState) string {
@@ -21,10 +23,10 @@ func getVisibleItems(root *Data, uiState *UIState) string {
         for _, item := range root.Items {
         	entry := fmt.Sprintf("%s -- $%.2f    (UPC: %d)\n", item.Item, item.Price, item.UPC)
         	if (
-                	textFilter == "" ||
-                	(strings.Contains(strings.ToLower(entry), strings.ToLower(textFilter)) &&
+                	(textFilter == "" ||
+                	strings.Contains(strings.ToLower(entry), strings.ToLower(textFilter))) &&
                 	int(item.Price) >= uiState.PriceMinimum &&
-                	int(item.Price) <= uiState.PriceMaximum)) {
+                	int(item.Price) <= uiState.PriceMaximum) {
                 	builder.WriteString(entry)
         	}
         }
@@ -91,17 +93,37 @@ func configurePriceMaximumFilter(data *Data, uiState *UIState, textView *tview.T
 	return priceMaximumFilter
 }
 
+func handleNavigation(app *tview.Application, uiState *UIState, fields [4]tview.Primitive) {
+        app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+        	switch event.Key() {
+                	case tcell.KeyTAB:
+                        	uiState.FocusedIndex += 1
+                        	if uiState.FocusedIndex == 4 {
+                                	uiState.FocusedIndex = 0
+                        	}
+                		app.SetFocus(fields[uiState.FocusedIndex])
+        	}
+
+        	return event
+        })
+}
+
 func render(data *Data) {
 	uiState := &UIState{
         	PriceMaximum: 99999,
         	PriceMinimum: 0,
         	Text: "",
+        	FocusedIndex: 0,
 	}
 	app := tview.NewApplication()
+
 	textView := configureTextView(data, uiState)
 	textFilter := configureTextFilter(data, uiState, textView)
 	priceMinimumFilter := configurePriceMinimumFilter(data, uiState, textView)
 	priceMaximumFilter := configurePriceMaximumFilter(data, uiState, textView)
+
+	fields := [4]tview.Primitive{textFilter, priceMinimumFilter, priceMaximumFilter, textView}
+	handleNavigation(app, uiState, fields)
 
 	flex := tview.NewFlex().
  		AddItem(textFilter, 0, 1, true).
