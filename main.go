@@ -1,6 +1,6 @@
 package main
 
 func main() {
-        root := getXMLData()
-	render(root)
+        data := getXMLData()
+	render(data)
 }
