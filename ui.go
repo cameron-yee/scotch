@@ -96,10 +96,16 @@ func configurePriceMaximumFilter(data *Data, uiState *UIState, textView *tview.T
 func handleNavigation(app *tview.Application, uiState *UIState, fields [4]tview.Primitive) {
         app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
         	switch event.Key() {
-                	case tcell.KeyTAB:
+                	case tcell.KeyTAB, tcell.KeyCtrlN:
                         	uiState.FocusedIndex += 1
                         	if uiState.FocusedIndex == 4 {
                                 	uiState.FocusedIndex = 0
+                        	}
+                		app.SetFocus(fields[uiState.FocusedIndex])
+                	case tcell.KeyCtrlP:
+                        	uiState.FocusedIndex -= 1
+                        	if uiState.FocusedIndex == -1 {
+                                	uiState.FocusedIndex = 3
                         	}
                 		app.SetFocus(fields[uiState.FocusedIndex])
         	}
