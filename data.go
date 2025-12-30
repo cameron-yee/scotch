@@ -39,7 +39,7 @@ func fetch(url string) (string, error) {
 
         body, err := io.ReadAll(resp.Body)
         if err != nil {
-        log.Fatal(err)
+                log.Fatal(err)
         }
         xmlData := string(body)
         return xmlData, nil
