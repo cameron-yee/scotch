@@ -17,12 +17,34 @@ type UIState struct {
 	FocusedIndex int
 }
 
+func getItemsLengthFormattingValues(items []Inventory) (int, int) {
+	maxItemLength := 0
+	minPriceLength := 999
+
+	for _, item := range items {
+		if len(item.Item) > maxItemLength {
+			maxItemLength = len(item.Item)
+		}
+		if len(strconv.Itoa(int(item.Price))) < minPriceLength {
+			minPriceLength = len(strconv.Itoa(int(item.Price)))
+		}
+	}
+
+	return maxItemLength, minPriceLength
+}
+
+func formatItemLine(item *Inventory, items []Inventory) string {
+	maxItemLength, minPriceLength := getItemsLengthFormattingValues(items)
+
+	return fmt.Sprintf("[::b]%s[::-]", item.Item) + strings.Repeat(" ", maxItemLength-len(item.Item)+4) + fmt.Sprintf("$%.2f", item.Price) + strings.Repeat(" ", 4-(len(strconv.Itoa(int(item.Price)))-minPriceLength)) + fmt.Sprintf("[::d](UPC: %d)[::-]\n", item.UPC)
+}
+
 func getVisibleItems(root *Data, uiState *UIState) string {
 	textFilter := uiState.Text
 
 	var builder strings.Builder
 	for _, item := range root.Items {
-		entry := fmt.Sprintf("%s -- $%.2f    (UPC: %d)\n", item.Item, item.Price, item.UPC)
+		entry := formatItemLine(&item, root.Items)
 		if (textFilter == "" ||
 			strings.Contains(strings.ToLower(entry), strings.ToLower(textFilter))) &&
 			int(item.Price) >= uiState.PriceMinimum &&
@@ -51,7 +73,7 @@ func getNewItems(AppData *AppData, uiState *UIState) string {
 			continue
 		}
 
-		entry := fmt.Sprintf("%s -- $%.2f    (UPC: %d)\n", a.Item, a.Price, a.UPC)
+		entry := formatItemLine(&a, AppData.latestData.data.Items) // not technically correct. This includes all the latest items, not just the new ones
 		if (textFilter == "" ||
 			strings.Contains(strings.ToLower(entry), strings.ToLower(textFilter))) &&
 			int(a.Price) >= uiState.PriceMinimum &&
@@ -73,7 +95,7 @@ func configurePreviousView(lastUpdated *time.Time, uiState *UIState) *tview.Text
 }
 
 func configureNewItemsView(appData *AppData, uiState *UIState) *tview.TextView {
-	textview := tview.NewTextView()
+	textview := tview.NewTextView().SetDynamicColors(true)
 	newItems := getNewItems(appData, uiState)
 
 	textview.SetText(newItems)
@@ -91,7 +113,7 @@ func configureLastUpdatedView(lastUpdated *time.Time, uiState *UIState) *tview.T
 }
 
 func configureDataView(data *Data, uiState *UIState) *tview.TextView {
-	textview := tview.NewTextView()
+	textview := tview.NewTextView().SetDynamicColors(true)
 	initialText := getVisibleItems(data, uiState)
 
 	textview.SetText(initialText)
