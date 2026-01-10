@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 )
 
@@ -32,18 +33,29 @@ type Inventory struct {
 	UPC      int64    `xml:"UPC"`
 }
 
-func getDateURL(startDate *time.Time, daysAgo int) (string, *time.Time) {
+type Target struct {
+	url  string
+	date *time.Time
+}
+
+type Result struct {
+	target *Target
+	data   *Data
+}
+
+func getTarget(startDate *time.Time, daysAgo int) *Target {
 	targetDate := startDate.AddDate(0, 0, -daysAgo)
 	formattedTargetDate := targetDate.Format("01_02_06")
 
 	// https://www.dtnfspiritsandwines.com/AllLiquor_11_04_25.xml
-	return fmt.Sprintf("https://www.dtnfspiritsandwines.com/AllLiquor_%s.xml", formattedTargetDate), &targetDate
+	return &Target{url: fmt.Sprintf("https://www.dtnfspiritsandwines.com/AllLiquor_%s.xml", formattedTargetDate), date: &targetDate}
 }
 
-func fetch(url string) (string, error) {
-	resp, err := http.Get(url)
+func fetchToChannel(target *Target, results chan<- *Result) {
+	resp, err := http.Get(target.url)
 	if err != nil {
-		return "", err
+		results <- &Result{target: target, data: nil}
+		return
 	}
 	defer resp.Body.Close()
 
@@ -52,46 +64,58 @@ func fetch(url string) (string, error) {
 		log.Fatal(err)
 	}
 	xmlData := string(body)
-	return xmlData, nil
+
+	var data Data
+	err = xml.Unmarshal([]byte(xmlData), &data)
+	if err != nil {
+		results <- &Result{target: target, data: nil}
+		return
+	}
+	results <- &Result{target: target, data: &data}
+	return
 }
 
-// Tries to get the correct URL with the latest date that has the XML data.
-// Will try 30 times before giving up.
-func getXMLData(startDate *time.Time) *DataInfo {
+func getXMLDataInfos(startDate *time.Time) []*DataInfo {
+	var targets []*Target
+
 	tries := 0
-
-	for tries < 366 {
-		url, targetDate := getDateURL(startDate, tries)
-		xmlData, err := fetch(url)
-		if err != nil {
-			tries += 1
-			continue
-		}
-
-		var data Data
-		err2 := xml.Unmarshal([]byte(xmlData), &data)
-		if err2 != nil {
-			tries += 1
-			continue
-		}
-
-		return &DataInfo{
-			data:        &data,
-			updatedDate: targetDate,
-		}
+	for tries < 365 {
+		targets = append(targets, getTarget(startDate, tries))
+		tries += 1
 	}
 
-	panic(fmt.Sprintf("Could not find valid URL in 365 tries. startDate: %s", startDate))
+	results := make(chan *Result, len(targets))
+	for _, target := range targets {
+		go fetchToChannel(target, results)
+	}
+
+	var dataInfos []*DataInfo
+	var sortedResults []*Result
+	for i := 0; i < len(targets); i++ {
+		result := <-results
+		sortedResults = append(sortedResults, result)
+	}
+	sort.Slice(sortedResults, func(i, j int) bool {
+		return sortedResults[j].target.date.Before(*sortedResults[i].target.date)
+	})
+	for i := 0; i < len(sortedResults); i++ {
+		result := sortedResults[i]
+		if result.data != nil {
+			dataInfos = append(dataInfos, &DataInfo{data: result.data, updatedDate: result.target.date})
+		}
+		if len(dataInfos) == 2 {
+			return dataInfos
+		}
+	}
+	panic("Could not find valid data in 365 tries.")
 }
 
 func getAppData() *AppData {
 	today := time.Now()
-	latestData := getXMLData(&today)
-	previousStartingDate := latestData.updatedDate.AddDate(0, 0, -1)
-	previousData := getXMLData(&previousStartingDate)
+	dataInfos := getXMLDataInfos(&today)
 
 	return &AppData{
-		latestData:   latestData,
-		previousData: previousData,
+		latestData:   dataInfos[0],
+		previousData: dataInfos[1],
 	}
 }
